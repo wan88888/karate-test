@@ -10,6 +10,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 jobs:
   test:
@@ -48,7 +49,10 @@ jobs:
 
     - name: Deploy to GitHub Pages
       if: always()
+      continue-on-error: true
       uses: actions/deploy-pages@v4
+      with:
+        token: ${{ secrets.KARATE_TOKEN }}
 
     - name: Send Report to Feishu
       if: success()
