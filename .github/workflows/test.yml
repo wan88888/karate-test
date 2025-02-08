@@ -1,0 +1,72 @@
+name: Karate Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Set up Chrome
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: stable
+
+    - name: Run Tests
+      run: mvn test
+
+    - name: Upload Test Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: karate-test-reports
+        path: target/karate-reports/
+
+    - name: Upload Pages Artifact
+      if: always()
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: target/karate-reports/
+
+    - name: Deploy to GitHub Pages
+      if: always()
+      uses: actions/deploy-pages@v4
+
+    - name: Send Report to Feishu
+      if: success()
+      run: |
+        REPORT_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/karate-summary.html"
+        if [ "${{ job.status }}" == "success" ]; then
+          STATUS_EMOJI="✅"
+          STATUS_TEXT="成功"
+        else
+          STATUS_EMOJI="❌"
+          STATUS_TEXT="失败"
+        fi
+        COMMIT_MSG="${{ github.event.head_commit.message }}"
+        COMMIT_URL="${{ github.event.head_commit.url }}"
+        WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+        MESSAGE="${STATUS_EMOJI} Karate测试执行${STATUS_TEXT}\n\n🔍 提交信息：${COMMIT_MSG}\n📊 测试报告：${REPORT_URL}\n🔗 工作流详情：${WORKFLOW_URL}"
+        
+        curl -X POST -H "Content-Type: application/json" \
+        -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"$MESSAGE\"}}" \
+        ${{ secrets.FEISHU_WEBHOOK_URL }}
